@@ -6,8 +6,6 @@ services:
     buildCommand: "./build.sh"
     startCommand: "gunicorn able.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
@@ -18,14 +16,10 @@ services:
           property: connectionString
       - key: ALLOWED_HOSTS
         value: able-connect-backend.onrender.com
-      # Uncomment and set if using existing Railway database:
-      # - key: DATABASE_URL
-      #   value: postgresql://postgres:PASSWORD@HOST:PORT/railway
-    healthCheckPath: /api/
+    healthCheckPath: /
 
 databases:
   - name: able-connect-db
     plan: free
     databaseName: able_connect
     user: able_connect_user
-
