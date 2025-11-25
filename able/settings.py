@@ -33,7 +33,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-)fdu_f(%rlx^o1p=03x%h
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,ableconnecte.vercel.app').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,ableconnecte.vercel.app,able-connect-backend.onrender.com').split(',')
 
 
 # Application definition
