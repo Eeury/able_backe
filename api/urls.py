@@ -6,6 +6,7 @@ urlpatterns = [
     # Authentication URLs
     path('auth/register/', views.register, name='register'),
     path('auth/login/', views.login, name='login'),
+    path('auth/logout/', views.logout, name='logout'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/profile/', views.profile, name='profile'),
     path('auth/profile/update/', views.update_profile, name='update_profile'),

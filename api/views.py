@@ -32,8 +32,8 @@ def register(request):
         refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserProfileSerializer(user).data,
+            'token': str(refresh.access_token),
             'refresh': str(refresh),
-            'access': str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -48,9 +48,9 @@ def login(request):
         refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserProfileSerializer(user).data,
+            'token': str(refresh.access_token),
             'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        })
+        }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -62,7 +62,7 @@ def profile(request):
     return Response(serializer.data)
 
 
-@api_view(['PUT'])
+@api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
     """Update current user profile"""
@@ -73,15 +73,41 @@ def update_profile(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    """User logout endpoint - blacklists the refresh token"""
+    try:
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {'error': 'Refresh token is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+        
+        return Response(
+            {'message': 'Successfully logged out'}, 
+            status=status.HTTP_205_RESET_CONTENT
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
 # Post Views
 class PostListCreateView(generics.ListCreateAPIView):
     """List all posts or create a new post"""
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['content', 'author__username']
     ordering_fields = ['created_at', 'likes_count']
     ordering = ['-created_at']
-    search_fields = ['content', 'author__username']
     
     def get_queryset(self):
         return Post.objects.filter(is_active=True)
@@ -100,7 +126,7 @@ class PostDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_object(self):
         obj = super().get_object()
-        # Only author can update/delete their posts
+        # Only post author can update/delete their posts
         if self.request.method in ['PUT', 'PATCH', 'DELETE']:
             if obj.author != self.request.user and not self.request.user.is_staff:
                 self.permission_denied(self.request)
