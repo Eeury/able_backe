@@ -24,6 +24,12 @@ class UserSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs.get('password') != attrs.get('confirm_password'):
             raise serializers.ValidationError("Passwords don't match")
+        
+        # Check for duplicate username/email
+        email = attrs.get('email')
+        if User.objects.filter(username=email).exists():
+             raise serializers.ValidationError({"username": "Use a different Username"})
+             
         return attrs
     
     def create(self, validated_data):
@@ -37,14 +43,21 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile (without sensitive data)"""
+    name = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'first_name', 'last_name',
+            'id', 'username', 'first_name', 'last_name', 'name',
             'user_type', 'disability_type', 'service_type', 
             'avatar', 'join_date', 'is_verified'
         ]
         read_only_fields = ['id', 'join_date', 'avatar']
+
+    def get_name(self, obj):
+        if obj.first_name and obj.last_name:
+            return f"{obj.first_name} {obj.last_name}"
+        return obj.username or obj.email.split('@')[0]
 
 
 class LoginSerializer(serializers.Serializer):
@@ -59,24 +72,35 @@ class LoginSerializer(serializers.Serializer):
         user_type = attrs.get('user_type')
         
         if email and password:
-            # Handle potential duplicate users with same email
-            users = User.objects.filter(email=email, user_type=user_type)
+            # Optimize login by using authenticate or direct lookup
+            # Since username is email in this system
+            user = authenticate(request=self.context.get('request'), username=email, password=password)
             
-            if users.exists():
-                user = None
-                # Check each user to see if password matches
-                for u in users:
-                    if u.check_password(password):
-                        user = u
-                        break
+            if not user:
+                # Fallback to manual check if authenticate fails (e.g. if custom backend not set up for email)
+                # But avoid iterating all users
+                try:
+                    user = User.objects.get(email=email)
+                    if not user.check_password(password):
+                        user = None
+                except User.DoesNotExist:
+                    user = None
+                except User.MultipleObjectsReturned:
+                    # This shouldn't happen with unique emails, but handle it
+                    user = User.objects.filter(email=email).first()
+                    if user and not user.check_password(password):
+                        user = None
+
+            if user:
+                if not user.is_active:
+                    raise serializers.ValidationError('User account is disabled.')
                 
-                if user:
-                    if not user.is_active:
-                        raise serializers.ValidationError('User account is disabled.')
-                    attrs['user'] = user
-                    return attrs
-                else:
-                    raise serializers.ValidationError('Invalid credentials.')
+                # Verify user type matches
+                if user.user_type != user_type:
+                     raise serializers.ValidationError('Invalid user type for this account.')
+                     
+                attrs['user'] = user
+                return attrs
             else:
                 raise serializers.ValidationError('Invalid credentials.')
         else:
@@ -102,7 +126,7 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = [
-            'id', 'author', 'content', 'created_at', 'updated_at',
+            'id', 'author', 'content', 'image', 'created_at', 'updated_at',
             'likes_count', 'comments', 'is_liked', 'is_active'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'likes_count']
