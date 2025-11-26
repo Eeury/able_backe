@@ -59,16 +59,25 @@ class LoginSerializer(serializers.Serializer):
         user_type = attrs.get('user_type')
         
         if email and password:
-            try:
-                user = User.objects.get(email=email, user_type=user_type)
-                if user.check_password(password):
+            # Handle potential duplicate users with same email
+            users = User.objects.filter(email=email, user_type=user_type)
+            
+            if users.exists():
+                user = None
+                # Check each user to see if password matches
+                for u in users:
+                    if u.check_password(password):
+                        user = u
+                        break
+                
+                if user:
                     if not user.is_active:
                         raise serializers.ValidationError('User account is disabled.')
                     attrs['user'] = user
                     return attrs
                 else:
                     raise serializers.ValidationError('Invalid credentials.')
-            except User.DoesNotExist:
+            else:
                 raise serializers.ValidationError('Invalid credentials.')
         else:
             raise serializers.ValidationError('Must include email and password.')
